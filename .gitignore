@@ -1,0 +1,29 @@
+# Terraform
+**/.terraform/
+**/*.tfstate
+**/*.tfstate.*
+**/terraform.tfvars
+**/terraform.tfvars.json
+**/.terraform.lock.hcl
+
+# Keys / creds
+**/*.pem
+**/*.key
+**/.env
+**/inventory.ini
+
+# Python
+**/__pycache__/
+**/*.pyc
+.venv/
+
+# OS/IDE
+.DS_Store
+.vscode/
+
+# Local dev
+backend/bank_website.db
+backend/venv/
+.venv/
+docker-compose*.yml
+commands.txt

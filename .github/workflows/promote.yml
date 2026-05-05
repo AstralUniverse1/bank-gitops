@@ -1,0 +1,89 @@
+name: Promote
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Docker image tag to deploy, usually the short or full commit SHA from bank-website CI"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: promote-bank-app
+  cancel-in-progress: false
+
+env:
+  IMAGE_REPO: astraluniverse/bank-app
+  CHART_DIR: helm/bank-app
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate image tag input
+        run: |
+          if ! printf '%s' "$IMAGE_TAG" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$'; then
+            echo "Invalid Docker image tag: $IMAGE_TAG" >&2
+            exit 1
+          fi
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+
+      - name: Update Helm image tag
+        run: |
+          python - <<'PY'
+          import os
+          import pathlib
+          import re
+
+          image_tag = os.environ["IMAGE_TAG"]
+          chart_dir = pathlib.Path(os.environ["CHART_DIR"])
+
+          values_path = chart_dir / "values.yaml"
+          values = values_path.read_text()
+          values = re.sub(
+              r'(?m)^(\s*repository:\s*).*$',
+              rf'\1{os.environ["IMAGE_REPO"]}',
+              values,
+          )
+          values = re.sub(
+              r'(?m)^(\s*tag:\s*).*$',
+              rf'\1"{image_tag}"',
+              values,
+          )
+          values_path.write_text(values)
+
+          chart_path = chart_dir / "Chart.yaml"
+          chart = chart_path.read_text()
+          version_match = re.search(r'(?m)^version:\s*(\d+)\.(\d+)\.(\d+)\s*$', chart)
+          if not version_match:
+              raise SystemExit("Chart.yaml version not found")
+
+          major, minor, patch = map(int, version_match.groups())
+          chart = re.sub(
+              r'(?m)^version:\s*.*$',
+              f"version: {major}.{minor}.{patch + 1}",
+              chart,
+          )
+          chart = re.sub(
+              r'(?m)^appVersion:\s*.*$',
+              f'appVersion: "{image_tag}"',
+              chart,
+          )
+          chart_path.write_text(chart)
+          PY
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+
+      - name: Commit promotion
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "$CHART_DIR/Chart.yaml" "$CHART_DIR/values.yaml"
+          git commit -m "chore(gitops): promote bank-app ${{ inputs.image_tag }}" || exit 0
+          git push

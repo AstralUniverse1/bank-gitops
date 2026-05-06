@@ -2,5 +2,5 @@ apiVersion: v2
 name: bank-app
 description: Bank app GitOps deployment with MySQL
 type: application
-version: 0.1.1
-appVersion: "e24d14c"
+version: 0.1.2
+appVersion: "7c32c4b"

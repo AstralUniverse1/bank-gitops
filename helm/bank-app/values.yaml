@@ -2,7 +2,7 @@ replicaCount: 1
 
 image:
   repository: astraluniverse/bank-app
-  tag: "7c32c4b"
+  tag: "253c982"
   pullPolicy: IfNotPresent
 
 service:

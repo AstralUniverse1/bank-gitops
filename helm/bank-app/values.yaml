@@ -8,13 +8,47 @@ image:
 service:
   nodePort: 32172
 
+networkPolicy:
+  enabled: false
+
+gunicorn:
+  workers: 2
+  threads: 4
+  timeout: 60
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+
 mysql:
   enabled: true
   image: "mysql:8.0"
+  host: mysql
+  port: 3306
   database: bank
   user: bankuser
   password: demo-bank-password
   rootPassword: demo-root-password
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 768Mi
   storage:
     size: 2Gi
     storageClassName: ""   # leave empty to use cluster default

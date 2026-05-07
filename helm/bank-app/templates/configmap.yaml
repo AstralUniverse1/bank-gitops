@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "bank-app.fullname" . }}-config
+data:
+  MYSQL_HOST: {{ .Values.mysql.host | quote }}
+  MYSQL_PORT: {{ .Values.mysql.port | quote }}
+  GUNICORN_WORKERS: {{ .Values.gunicorn.workers | quote }}
+  GUNICORN_THREADS: {{ .Values.gunicorn.threads | quote }}
+  GUNICORN_TIMEOUT: {{ .Values.gunicorn.timeout | quote }}

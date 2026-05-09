@@ -1,81 +1,62 @@
 # Bank GitOps
 
-GitOps deployment companion for the `bank-website` application.
+GitOps deployment repo for the demo banking app built in [`bank-website`](https://github.com/AstralUniverse1/bank-website).
 
-The app source, Dockerfile, CI, and Docker image publishing live in:
+This repo owns the Helm chart, ArgoCD Application manifest, validation workflow, and manual image promotion workflow.
 
-https://github.com/AstralUniverse1/bank-website
+## Repository Structure
 
-This repo owns the deployment state:
+| Path | Purpose |
+| --- | --- |
+| `.github/workflows/validate.yml` | Helm lint and render validation |
+| `.github/workflows/promote.yml` | Manual workflow for promoting a Docker image tag |
+| `argocd/bank-app.yaml` | ArgoCD Application manifest |
+| `helm/bank-app/` | Helm chart for the app and MySQL |
+| `helm/bank-app/values.yaml` | Image tag, Gunicorn runtime config, MySQL config, resource limits |
+| `helm/bank-app/templates/` | Kubernetes manifests rendered by Helm |
 
-- Helm chart for the bank app and MySQL.
-- ArgoCD Application manifest.
-- Manual promotion workflow that updates the deployed image tag.
+## Deployment Model
 
-## Runtime Model
+| Area | Details |
+| --- | --- |
+| App image | `astraluniverse/bank-app`, published by `bank-website` CI |
+| App workload | Kubernetes Deployment running the Flask/Gunicorn container on port `5000` |
+| Service | NodePort service forwarding port `80` to the app container |
+| Database | In-cluster MySQL by default; external MySQL can be used through Helm values |
+| State | MySQL StatefulSet with PVC when in-cluster MySQL is enabled |
+| ArgoCD | Watches `helm/bank-app` on `main` and deploys to the `bank` namespace |
 
-The chart deploys the Flask app container published by `bank-website`. The image runs Gunicorn, exposes port `5000`, and provides:
+## Promotion Workflow
 
-- `GET /healthz` for liveness.
-- `GET /readyz` for database-backed readiness.
+The `Promote` workflow takes a manual `image_tag` input.
 
-The default chart deploys in-cluster MySQL for a self-contained portfolio environment. External MySQL can be used by setting `mysql.enabled=false` and overriding `mysql.host`, `mysql.port`, and credentials.
+It updates the Helm chart image tag, bumps the chart version, updates `appVersion`, and commits the change to `main`.
 
-## Hardening
+ArgoCD then detects the Git change and syncs the updated desired state to the cluster.
 
-The Helm chart includes production-style runtime controls:
+## Requirements
 
-- ConfigMap for non-sensitive app settings.
-- Secret for database credentials.
-- App readiness and liveness probes.
-- CPU and memory requests/limits for app and MySQL.
-- Non-root app security context matching the container UID/GID.
-- Optional NetworkPolicy, disabled by default with `networkPolicy.enabled=false`.
+- Kubernetes cluster
+- ArgoCD installed in the `argocd` namespace
+- Default StorageClass, or `mysql.storage.storageClassName` set in Helm values
+- Access to the configured NodePort for external testing
 
-## Promotion Flow
+## Helm Chart
 
-1. `bank-website` CI builds and pushes `astraluniverse/bank-app`.
-2. Choose the image tag to deploy, usually the short or full commit SHA.
-3. Run the `Promote` workflow in this repo with `image_tag`.
-4. The workflow updates `helm/bank-app/values.yaml`, bumps the chart patch version, and commits to `main`.
-5. ArgoCD detects the Git change and reconciles the cluster.
+The chart includes:
 
-## ArgoCD
+- app Deployment
+- NodePort Service
+- ConfigMap for non-sensitive runtime settings
+- Kubernetes Secret template populated from Helm values
+- readiness and liveness probes
+- app resource requests and limits
+- non-root app security context
+- optional NetworkPolicy, disabled by default
+- optional in-cluster MySQL StatefulSet with persistent storage
 
-Apply the ArgoCD Application manifest:
+## Demo Credentials
 
-```bash
-kubectl apply -f argocd/bank-app.yaml
-```
+`values.yaml` contains demo MySQL credentials so the chart can run as a self-contained portfolio deployment.
 
-The Application watches this repo at `helm/bank-app` and deploys to the `bank` namespace with automated sync enabled.
-
-## Helm
-
-Render locally:
-
-```bash
-helm template bank-app helm/bank-app
-```
-
-Validate locally:
-
-```bash
-helm lint helm/bank-app
-```
-
-The chart includes demo MySQL credentials in `values.yaml` so it can render and run as a portfolio example. Override them with environment-specific values before using this pattern outside a demo.
-
-Render with an external MySQL host:
-
-```bash
-helm template bank-app helm/bank-app \
-  --set mysql.enabled=false \
-  --set mysql.host=prod-mysql.example.com
-```
-
-Render the optional NetworkPolicy:
-
-```bash
-helm template bank-app helm/bank-app --set networkPolicy.enabled=true
-```
+For any real environment, override the database credentials outside the repo and use a proper secret-management flow.
